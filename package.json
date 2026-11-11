@@ -30,7 +30,7 @@
   "scripts": {
     "setup": "pnpm install && pnpm run scripts:generate",
     "dev": "pnpm run scripts:generate && pnpm --dir cloudflare run dev",
-    "build": "pnpm run scripts:generate && pnpm run build:frontend",
+    "build": "pnpm run scripts:generate && pnpm run build:frontend && node scripts/ci-migrate.mjs",
     "build:frontend": "VITE_API_URL=/ pnpm --dir frontend run build",
     "install:cloudflare": "node scripts/install-cloudflare.mjs",
     "install:quick": "node scripts/install-cloudflare.mjs --quick",
@@ -83,6 +83,7 @@
     }
   },
   "devDependencies": {
-    "cf": "1.0.0-beta.14"
+    "cf": "1.0.0-beta.14",
+    "wrangler": "^4.110.0"
   }
 }
