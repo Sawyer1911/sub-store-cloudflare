@@ -1002,6 +1002,9 @@ function parseHysteria2(line: string, index: number): ProxyNode {
     port: Number(url.port || 443),
     ports: hoppingPorts || params.get("mport")?.replace(/;/g, ",") || undefined,
     password: auth,
+    // Hysteria2 is TLS-only; v2ray-family clients still expect an explicit
+    // security=tls marker in the share link.
+    tls: true,
     sni: params.get("sni") || params.get("peer") || undefined,
     alpn: commaList(params.get("alpn")),
     "skip-cert-verify": boolParam(params.get("insecure") || params.get("allowInsecure")),
@@ -1051,18 +1054,25 @@ function parseHysteria(line: string, index: number): ProxyNode {
 function parseTrojan(line: string, index: number): ProxyNode {
   const url = new URL(line);
   const params = url.searchParams;
-  const type = (params.get("type") || "tcp").toLowerCase();
+  const publicKey = params.get("pbk") || params.get("public-key") || undefined;
+  const shortId = params.get("sid") || params.get("short-id") || undefined;
+  const security = (params.get("security") || "").toLowerCase();
   return stripUndefined({
     name: uriName(url, `trojan-${index + 1}`),
     type: "trojan",
     server: uriHostname(url),
     port: Number(url.port || 443),
     password: safeDecodeURIComponent(url.username),
+    // Trojan is TLS by default; security=none is the only plaintext form.
+    tls: security !== "none",
+    "reality-opts": security === "reality" && publicKey
+      ? stripUndefined({ "public-key": publicKey, "short-id": shortId, "spider-x": params.get("spx") || "/" })
+      : undefined,
     sni: params.get("sni") || params.get("peer") || undefined,
     alpn: commaList(params.get("alpn")),
     "skip-cert-verify": boolParam(params.get("allowInsecure") || params.get("insecure")),
     "client-fingerprint": params.get("fp") || undefined,
-    ...(type === "tcp" ? {} : parseUriTransport(params)),
+    ...parseUriTransport(params),
     udp: true,
   });
 }
@@ -2528,6 +2538,7 @@ function toProxyUri(proxy: ProxyNode) {
 
   if (proxy.type === "hysteria2") {
     const params = new URLSearchParams();
+    params.set("security", "tls");
     if (proxy.sni) params.set("sni", String(proxy.sni));
     if (proxy["skip-cert-verify"]) params.set("insecure", "1");
     if (proxy.obfs) params.set("obfs", String(proxy.obfs));
@@ -2573,12 +2584,17 @@ function toProxyUri(proxy: ProxyNode) {
 
   if (proxy.type === "trojan") {
     const params = new URLSearchParams();
+    const realityOpts = proxy["reality-opts"] as Record<string, unknown> | undefined;
+    params.set("security", realityOpts ? "reality" : proxy.tls === false ? "none" : "tls");
     if (proxy.sni) params.set("sni", String(proxy.sni));
     if (proxy["skip-cert-verify"]) params.set("allowInsecure", "1");
     const alpn = formatAlpn(proxy.alpn);
     if (alpn) params.set("alpn", alpn);
     if (proxy["client-fingerprint"]) params.set("fp", String(proxy["client-fingerprint"]));
-    if (proxy.network && proxy.network !== "tcp") setUriTransportParams(params, proxy);
+    if (realityOpts?.["public-key"]) params.set("pbk", String(realityOpts["public-key"]));
+    if (realityOpts?.["short-id"]) params.set("sid", String(realityOpts["short-id"]));
+    if (realityOpts?.["public-key"]) params.set("spx", String(realityOpts["spider-x"] || "/"));
+    setUriTransportParams(params, proxy);
     return `trojan://${encodeURIComponent(String(proxy.password))}@${formatUriHost(proxy.server)}:${proxy.port}?${params.toString()}#${encodeURIComponent(proxy.name)}`;
   }
 

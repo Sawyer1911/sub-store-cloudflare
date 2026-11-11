@@ -20,6 +20,32 @@ describe("subscription parsing and limits", () => {
     expect(nodes[0].name).toBe("Parsed Node");
   });
 
+  it("preserves explicit TLS and Reality parameters in generated URIs", async () => {
+    const output = await buildSubscription({
+      source: {
+        id: "security-smoke",
+        name: "Security Smoke",
+        type: "local",
+        url: "",
+        content: [
+          "trojan://pass@example.com:443?security=tls&sni=example.com#Trojan-TLS",
+          "trojan://pass@example.com:8443?security=reality&sni=www.bing.com&pbk=PUBKEY&sid=abcd1234&spx=%2F&type=tcp&fp=chrome#Trojan-Reality",
+          "hysteria2://pass@example.com:443?security=tls&sni=example.com#Hy2",
+        ].join("\n"),
+      },
+      sources: [],
+      requestUrl: new URL("https://example.com/download/source/security-smoke/uri"),
+      target: "uri",
+    });
+
+    expect(output).toContain("trojan://pass@example.com:443?security=tls");
+    expect(output).toContain("security=reality");
+    expect(output).toContain("pbk=PUBKEY");
+    expect(output).toContain("sid=abcd1234");
+    expect(output).toContain("sni=www.bing.com");
+    expect(output).toContain("hysteria2://pass@example.com:443?security=tls");
+  });
+
   it("renders every advertised target", async () => {
     const targets = ["mihomo", "stash", "surge", "surge-mac", "surfboard", "loon", "egern", "shadowrocket", "qx", "sing-box", "v2ray", "uri", "json"] as const;
     for (const target of targets) {
